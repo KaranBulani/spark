@@ -1,0 +1,16 @@
+environment: dev
+
+spark:
+  app_name: simple-fpe-demo-dev
+  master: local[*]
+  log_level: WARN
+  configs:
+    spark.ui.enabled: "false"
+
+dlp:
+  backend: local
+  field_name: customer_ref
+  local_key: simple-demo-key
+
+job:
+  redact_field: customer_ref
