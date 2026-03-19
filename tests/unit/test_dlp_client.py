@@ -28,11 +28,12 @@ def test_local_encrypt_decrypt_round_trip() -> None:
 def test_local_encrypt_decrypt_list_round_trip() -> None:
     client = DlpClient({"backend": "local", "local_key": "unit-test-key", "field_name": "customer_ref"})
 
-    original_values = ["CUST001234", "ACCT998877", "USER554433"]
+    original_values = ["CUST001234", "CUST001234", "USER554433"]
     encrypted_values = client.encrypt_values(original_values)
     decrypted_values = client.decrypt_values(encrypted_values)
 
     assert encrypted_values != original_values
+    assert encrypted_values[0] == encrypted_values[1]
     assert decrypted_values == original_values
 
 

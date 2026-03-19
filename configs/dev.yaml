@@ -1,34 +1,16 @@
 environment: dev
 
 spark:
-  app_name: dlp-redaction-poc-dev
+  app_name: simple-fpe-demo-dev
   master: local[*]
   log_level: WARN
   configs:
-    spark.sql.shuffle.partitions: "4"
-
-gcp:
-  project_id: your-dev-project-id
-  location: global
-  bigquery:
-    input_table: your-dev-project.raw.customer_table
-    output_table: your-dev-project.redacted.customer_table
+    spark.ui.enabled: "false"
 
 dlp:
-  backend: gcp
+  backend: local
   field_name: customer_ref
-  common_alphabet: ALPHA_NUMERIC
-  local_key: dev-fallback-key
-  kms_key_name: projects/your-dev-project-id/locations/global/keyRings/your-ring/cryptoKeys/your-key
-  wrapped_key_base64: CHANGE_ME_WRAPPED_AES_256_KEY
-  unwrapped_key_base64: ""
+  local_key: simple-demo-key
 
 job:
   redact_field: customer_ref
-  sample_records:
-    - record_id: "101"
-      customer_ref: DEV0012345
-      region: APAC
-    - record_id: "102"
-      customer_ref: DEV0099887
-      region: EMEA

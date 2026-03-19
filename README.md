@@ -9,9 +9,9 @@ The current implementation supports two modes:
 
 ## Repo Flow
 
-1. `src/readers/data_reader.py` returns local sample records for the POC.
-2. `src/dlp/dlp_client.py` encrypts and decrypts the configured field.
-3. `src/spark_jobs/redact_job.py` creates a Spark session, runs the redaction flow, and prints a JSON summary.
+1. `src/readers/data_reader.py` holds the hardcoded demo values and records.
+2. `src/dlp/dlp_client.py` encrypts and decrypts the chosen field.
+3. `src/spark_jobs/redact_job.py` runs the demo, checks that repeated input gives repeated encrypted output, and prints a JSON summary.
 4. `src/writers/data_writer.py` is a placeholder for the future BigQuery write path.
 
 ## Local Config
@@ -22,18 +22,11 @@ It uses:
 
 - Spark in local mode: `local[*]`
 - Local reversible demo cipher
-- Sample records with `customer_ref` as the redacted field
+- `customer_ref` as the redacted field
 
 ## Dev And Prod Configs
 
-`configs/dev.yaml` and `configs/prod.yaml` contain dummy placeholders for:
-
-- `gcp.project_id`
-- BigQuery input and output tables
-- `dlp.kms_key_name`
-- `dlp.wrapped_key_base64`
-
-Replace those values before switching the backend to real Google DLP usage.
+`configs/dev.yaml` and `configs/prod.yaml` now mirror the same simple local demo shape with different environment names.
 
 ## Docker
 
@@ -65,7 +58,7 @@ Or with Spark submit:
 spark-submit src/spark_jobs/redact_job.py --config configs/local.yaml
 ```
 
-If you are running inside an image that does not contain `configs/`, this also works because the job has a built-in local fallback config:
+If you want the job to pick the environment file by name, this also works:
 
 ```bash
 python -m src.spark_jobs.redact_job --env local
@@ -78,6 +71,7 @@ The job prints a JSON summary that includes:
 - original values
 - encrypted values
 - decrypted values
+- repeated-value checks that show same input gives same encrypted output
 - Spark app details
 - input and result records
 

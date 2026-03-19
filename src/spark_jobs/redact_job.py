@@ -9,25 +9,26 @@ from typing import Any
 
 import yaml
 
-#spark-submit src/spark_jobs/redact_job.py --config configs/local.yaml
-#spark-submit redact_job.py --config configs/local.yaml
-# Purpose to run both ways
+# Allow running with either `python .../redact_job.py` or `spark-submit`.
 if __package__ in (None, ""):
     repo_root = Path(__file__).resolve().parents[2]
     if str(repo_root) not in sys.path:
         sys.path.insert(0, str(repo_root))
 
 from src.dlp.dlp_client import DlpClient
-from src.readers.data_reader import extract_field_values, read_sample_records
+from src.readers.data_reader import DEMO_CONTEXT, DEMO_REDACT_FIELD, extract_field_values, read_sample_records
 from src.utils.logger import get_logger
 from src.utils.spark_session import get_spark, stop_spark
 
 
-def load_config(config_path: str | Path) -> dict[str, Any]:
+def load_config(config_path: str | Path | None = None, env: str = "local") -> dict[str, Any]:
     """
-    Load configuration strictly from a given YAML file.
+    Load configuration from a YAML file.
     """
-    resolved_path = Path(config_path)
+    if config_path is None:
+        resolved_path = Path(__file__).resolve().parents[2] / "configs" / f"{env}.yaml"
+    else:
+        resolved_path = Path(config_path)
 
     if not resolved_path.exists():
         raise FileNotFoundError(f"Config file not found: {resolved_path}")
@@ -40,6 +41,7 @@ def load_config(config_path: str | Path) -> dict[str, Any]:
 
     return config
 
+
 def run_redact_job(
     config_path: str | Path | None = None,
     env: str = "local",
@@ -48,9 +50,11 @@ def run_redact_job(
     job_config = load_config(config_path=config_path, env=env)
     logger = get_logger(name="src.spark_jobs.redact_job", level=job_config.get("spark", {}).get("log_level", "INFO"))
 
-    redact_field = job_config.get("job", {}).get("redact_field", "customer_ref")
+    redact_field = job_config.get("job", {}).get("redact_field", DEMO_REDACT_FIELD)
+    logger.info("Starting the simple redaction demo.")
+    logger.info("Reading hardcoded demo records from data_reader.py.")
 
-    records = read_sample_records(job_config)
+    records = read_sample_records()
     original_values = extract_field_values(records, redact_field)
 
     dlp_client = DlpClient(
@@ -60,31 +64,53 @@ def run_redact_job(
     )
     encrypted_values = dlp_client.encrypt_values(original_values)
     decrypted_values = dlp_client.decrypt_values(encrypted_values)
-    result_records = _build_result_records(records, redact_field, encrypted_values, decrypted_values)
+
+    result_records: list[dict[str, Any]] = []
+    for record, encrypted_value, decrypted_value in zip(records, encrypted_values, decrypted_values):
+        result_record = dict(record)
+        result_record[f"encrypted_{redact_field}"] = encrypted_value
+        result_record[f"decrypted_{redact_field}"] = decrypted_value
+        result_records.append(result_record)
+
+    repeated_value_groups: dict[str, list[str | None]] = {}
+    for original_value, encrypted_value in zip(original_values, encrypted_values):
+        repeated_value_groups.setdefault(str(original_value), []).append(encrypted_value)
+
+    same_input_same_output_examples = []
+    for original_value, encrypted_group in repeated_value_groups.items():
+        if len(encrypted_group) > 1:
+            same_input_same_output_examples.append(
+                {
+                    "original_value": original_value,
+                    "encrypted_values": encrypted_group,
+                    "all_encrypted_values_match": len(set(encrypted_group)) == 1,
+                }
+            )
 
     spark = get_spark(job_config)
-
     logger.info("Spark session created. app_name=%s version=%s", spark.sparkContext.appName, spark.version)
-    logger.info("Loaded %s sample records from data_reader.", len(records))
-    logger.info("Original values: %s", original_values)
-    logger.info("Encrypted values: %s", encrypted_values)
-    logger.info("Decrypted values: %s", decrypted_values)
 
     input_df = spark.createDataFrame(records)
     result_df = spark.createDataFrame(result_records)
     input_preview = [row.asDict() for row in input_df.collect()]
     result_preview = [row.asDict() for row in result_df.collect()]
 
+    logger.info("Original values: %s", original_values)
+    logger.info("Encrypted values: %s", encrypted_values)
+    logger.info("Decrypted values: %s", decrypted_values)
+    logger.info("Same input gives same output check: %s", same_input_same_output_examples)
     logger.info("Input dataframe preview: %s", input_preview)
     logger.info("Result dataframe preview: %s", result_preview)
 
     summary = {
         "environment": job_config.get("environment", env),
         "backend": job_config.get("dlp", {}).get("backend", "local"),
+        "demo_context": deepcopy(DEMO_CONTEXT),
         "redact_field": redact_field,
         "original_values": original_values,
         "encrypted_values": encrypted_values,
         "decrypted_values": decrypted_values,
+        "same_input_same_output_examples": same_input_same_output_examples,
         "input_records": input_preview,
         "result_records": result_preview,
         "spark": {
@@ -97,21 +123,6 @@ def run_redact_job(
     stop_spark(spark)
 
     return summary
-
-
-def _build_result_records(
-    records: list[dict[str, Any]],
-    redact_field: str,
-    encrypted_values: list[str | None],
-    decrypted_values: list[str | None],
-) -> list[dict[str, Any]]:
-    result_records: list[dict[str, Any]] = []
-    for index, record in enumerate(records):
-        result_record = dict(record)
-        result_record[f"encrypted_{redact_field}"] = encrypted_values[index]
-        result_record[f"decrypted_{redact_field}"] = decrypted_values[index]
-        result_records.append(result_record)
-    return result_records
 
 
 def parse_args() -> argparse.Namespace:

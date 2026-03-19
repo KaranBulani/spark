@@ -10,7 +10,7 @@ def spark():
     spark_session = get_spark(
         {
             "spark": {
-                "app_name": "pytest-dlp-redaction-poc",
+                "app_name": "simple-fpe-demo-tests",
                 "master": "local[2]",
                 "log_level": "ERROR",
                 "configs": {

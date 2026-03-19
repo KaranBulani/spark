@@ -17,7 +17,7 @@ class DlpClientError(RuntimeError):
 
 
 class LocalFormatPreservingCipher:
-    """Local reversible demo cipher that preserves length and character classes."""
+    """Small reversible demo cipher. Same input and key will always give the same output."""
 
     _DIGITS = string.digits
     _LOWER = string.ascii_lowercase
@@ -68,7 +68,7 @@ class LocalFormatPreservingCipher:
 
 
 class DlpClient:
-    """Config-driven client for local demo encryption or Google DLP table FPE."""
+    """Demo-friendly wrapper around the local cipher, with an optional Google DLP path."""
 
     def __init__(self, dlp_config: dict[str, Any], gcp_config: dict[str, Any] | None = None, logger: logging.Logger | None = None) -> None:
         self.dlp_config = dlp_config or {}
@@ -79,9 +79,7 @@ class DlpClient:
         self._google_client = None
 
         if self.backend == "local":
-            self.logger.warning(
-                "Using the local reversible demo cipher. This is for local development only and is not a substitute for Google DLP FPE."
-            )
+            self.logger.warning("Using the local reversible demo cipher.")
 
     def encrypt_string(self, value: str | None) -> str | None:
         if self.backend == "gcp":

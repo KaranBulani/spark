@@ -3,35 +3,63 @@ from __future__ import annotations
 from copy import deepcopy
 from typing import Any
 
+DEMO_REDACT_FIELD = "customer_ref"
+DEMO_BATCH_ID = 101
+DEMO_SHARED_CUSTOMER_REF = "CUST000111"
+DEMO_SHARED_VIP_REF = "VIP777888"
+DEMO_NOTE = "Same original value should get the same encrypted value."
 
-DEFAULT_SAMPLE_RECORDS = [
-    {"record_id": "001", "customer_ref": "CUST001234", "region": "APAC"},
-    {"record_id": "002", "customer_ref": "ACCT998877", "region": "EMEA"},
-    {"record_id": "003", "customer_ref": "USER554433", "region": "AMER"},
+DEMO_CONTEXT = {
+    "demo_name": "Simple FPE walkthrough",
+    "batch_id": DEMO_BATCH_ID,
+    "note": DEMO_NOTE,
+}
+
+DEMO_RECORDS = [
+    {
+        "record_id": "001",
+        DEMO_REDACT_FIELD: DEMO_SHARED_CUSTOMER_REF,
+        "region": "APAC",
+        "batch_id": DEMO_BATCH_ID,
+        "owner": "Alice",
+    },
+    {
+        "record_id": "002",
+        DEMO_REDACT_FIELD: DEMO_SHARED_CUSTOMER_REF,
+        "region": "EMEA",
+        "batch_id": DEMO_BATCH_ID,
+        "owner": "Bob",
+    },
+    {
+        "record_id": "003",
+        DEMO_REDACT_FIELD: DEMO_SHARED_VIP_REF,
+        "region": "AMER",
+        "batch_id": DEMO_BATCH_ID,
+        "owner": "Carla",
+    },
+    {
+        "record_id": "004",
+        DEMO_REDACT_FIELD: DEMO_SHARED_VIP_REF,
+        "region": "APAC",
+        "batch_id": DEMO_BATCH_ID,
+        "owner": "Deepak",
+    },
+    {
+        "record_id": "005",
+        DEMO_REDACT_FIELD: "USER123456",
+        "region": "LATAM",
+        "batch_id": DEMO_BATCH_ID,
+        "owner": "Elena",
+    },
 ]
 
-
-def read_sample_records(config: dict[str, Any]) -> list[dict[str, Any]]:
-    """Return local records that make the redaction flow easy to validate."""
-
-    job_config = config.get("job", {})
-    configured_records = job_config.get("sample_records")
-    if configured_records:
-        return deepcopy(configured_records)
-
-    redact_field = job_config.get("redact_field", "customer_ref")
-    sample_values = job_config.get("sample_values", [record["customer_ref"] for record in DEFAULT_SAMPLE_RECORDS])
-    return [
-        {"record_id": f"{index + 1:03d}", redact_field: str(value), "region": "LOCAL"}
-        for index, value in enumerate(sample_values)
-    ]
-
+def read_sample_records() -> list[dict[str, Any]]:
+    """Return the hardcoded demo records used by the Spark redaction walkthrough."""
+    return deepcopy(DEMO_RECORDS)
 
 def extract_field_values(records: list[dict[str, Any]], field_name: str) -> list[str]:
     """Extract a target field from the sample record set."""
-
     return [str(record.get(field_name, "")) for record in records]
-
 
 def read_bigquery_table(*_, **__):
     """Placeholder for the later BigQuery read path."""
