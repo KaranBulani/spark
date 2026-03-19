@@ -1,0 +1,38 @@
+environment: local
+
+spark:
+  app_name: dlp-redaction-poc-local
+  master: local[*]
+  log_level: WARN
+  configs:
+    spark.sql.shuffle.partitions: "2"
+    spark.ui.enabled: "false"
+
+gcp:
+  project_id: local-demo-project
+  location: global
+  bigquery:
+    input_table: local_project.raw.sample_customer_table
+    output_table: local_project.redacted.sample_customer_table
+
+dlp:
+  backend: local
+  field_name: customer_ref
+  common_alphabet: ALPHA_NUMERIC
+  local_key: spark-local-demo-key
+  kms_key_name: ""
+  wrapped_key_base64: ""
+  unwrapped_key_base64: ""
+
+job:
+  redact_field: customer_ref
+  sample_records:
+    - record_id: "001"
+      customer_ref: CUST001234
+      region: APAC
+    - record_id: "002"
+      customer_ref: ACCT998877
+      region: EMEA
+    - record_id: "003"
+      customer_ref: USER554433
+      region: AMER

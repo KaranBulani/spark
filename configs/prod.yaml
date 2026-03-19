@@ -1,0 +1,34 @@
+environment: prod
+
+spark:
+  app_name: dlp-redaction-poc-prod
+  master: local[*]
+  log_level: WARN
+  configs:
+    spark.sql.shuffle.partitions: "8"
+
+gcp:
+  project_id: your-prod-project-id
+  location: global
+  bigquery:
+    input_table: your-prod-project.raw.customer_table
+    output_table: your-prod-project.redacted.customer_table
+
+dlp:
+  backend: gcp
+  field_name: customer_ref
+  common_alphabet: ALPHA_NUMERIC
+  local_key: prod-fallback-key
+  kms_key_name: projects/your-prod-project-id/locations/global/keyRings/your-ring/cryptoKeys/your-key
+  wrapped_key_base64: CHANGE_ME_WRAPPED_AES_256_KEY
+  unwrapped_key_base64: ""
+
+job:
+  redact_field: customer_ref
+  sample_records:
+    - record_id: "901"
+      customer_ref: PROD001122
+      region: APAC
+    - record_id: "902"
+      customer_ref: PROD998877
+      region: EMEA
