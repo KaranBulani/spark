@@ -9,6 +9,9 @@ from typing import Any
 
 import yaml
 
+#spark-submit src/spark_jobs/redact_job.py --config configs/local.yaml
+#spark-submit redact_job.py --config configs/local.yaml
+# Purpose to run both ways
 if __package__ in (None, ""):
     repo_root = Path(__file__).resolve().parents[2]
     if str(repo_root) not in sys.path:
@@ -20,66 +23,31 @@ from src.utils.logger import get_logger
 from src.utils.spark_session import get_spark, stop_spark
 
 
-DEFAULT_CONFIG: dict[str, Any] = {
-    "environment": "local",
-    "spark": {
-        "app_name": "dlp-redaction-poc-local",
-        "master": "local[*]",
-        "log_level": "WARN",
-        "configs": {
-            "spark.sql.shuffle.partitions": "2",
-            "spark.ui.enabled": "false",
-        },
-    },
-    "gcp": {
-        "project_id": "local-demo-project",
-        "location": "global",
-        "bigquery": {
-            "input_table": "local_project.raw.sample_customer_table",
-            "output_table": "local_project.redacted.sample_customer_table",
-        },
-    },
-    "dlp": {
-        "backend": "local",
-        "field_name": "customer_ref",
-        "common_alphabet": "ALPHA_NUMERIC",
-        "local_key": "spark-local-demo-key",
-        "kms_key_name": "",
-        "wrapped_key_base64": "",
-        "unwrapped_key_base64": "",
-    },
-    "job": {
-        "redact_field": "customer_ref",
-        "sample_records": [
-            {"record_id": "001", "customer_ref": "CUST001234", "region": "APAC"},
-            {"record_id": "002", "customer_ref": "ACCT998877", "region": "EMEA"},
-            {"record_id": "003", "customer_ref": "USER554433", "region": "AMER"},
-        ],
-    },
-}
+def load_config(config_path: str | Path) -> dict[str, Any]:
+    """
+    Load configuration strictly from a given YAML file.
+    """
+    resolved_path = Path(config_path)
 
+    if not resolved_path.exists():
+        raise FileNotFoundError(f"Config file not found: {resolved_path}")
 
-def load_config(config_path: str | Path | None = None, env: str = "local") -> dict[str, Any]:
-    resolved_path = Path(config_path) if config_path else Path(__file__).resolve().parents[2] / "configs" / f"{env}.yaml"
-    merged_config = deepcopy(DEFAULT_CONFIG)
+    with resolved_path.open("r", encoding="utf-8") as config_file:
+        config = yaml.safe_load(config_file)
 
-    if resolved_path.exists():
-        with resolved_path.open("r", encoding="utf-8") as config_file:
-            loaded_config = yaml.safe_load(config_file) or {}
-        return _deep_merge(merged_config, loaded_config)
+    if not config:
+        raise ValueError("Config file is empty or invalid")
 
-    merged_config["environment"] = env
-    return merged_config
-
+    return config
 
 def run_redact_job(
-    config: dict[str, Any] | None = None,
     config_path: str | Path | None = None,
     env: str = "local",
-    spark=None,
 ) -> dict[str, Any]:
-    job_config = deepcopy(config) if config else load_config(config_path=config_path, env=env)
+
+    job_config = load_config(config_path=config_path, env=env)
     logger = get_logger(name="src.spark_jobs.redact_job", level=job_config.get("spark", {}).get("log_level", "INFO"))
+
     redact_field = job_config.get("job", {}).get("redact_field", "customer_ref")
 
     records = read_sample_records(job_config)
@@ -94,8 +62,7 @@ def run_redact_job(
     decrypted_values = dlp_client.decrypt_values(encrypted_values)
     result_records = _build_result_records(records, redact_field, encrypted_values, decrypted_values)
 
-    should_stop_spark = spark is None
-    spark = spark or get_spark(job_config)
+    spark = get_spark(job_config)
 
     logger.info("Spark session created. app_name=%s version=%s", spark.sparkContext.appName, spark.version)
     logger.info("Loaded %s sample records from data_reader.", len(records))
@@ -127,19 +94,9 @@ def run_redact_job(
         },
     }
 
-    if should_stop_spark:
-        stop_spark(spark)
+    stop_spark(spark)
 
     return summary
-
-
-def _deep_merge(base: dict[str, Any], override: dict[str, Any]) -> dict[str, Any]:
-    for key, value in override.items():
-        if isinstance(value, dict) and isinstance(base.get(key), dict):
-            base[key] = _deep_merge(base[key], value)
-        else:
-            base[key] = value
-    return base
 
 
 def _build_result_records(
@@ -161,12 +118,12 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run the Spark redaction POC job.")
     parser.add_argument("--config", default=None, help="Optional path to a YAML config file.")
     parser.add_argument("--env", default="local", choices=["local", "dev", "prod"], help="Environment config to load.")
-    return parser.parse_args()
+    return parser.parse_args() # Namespace(config='configs/local.yaml', env='local')
 
 
 def main() -> None:
     args = parse_args()
-    summary = run_redact_job(config_path=args.config, env=args.env)
+    summary = run_redact_job(config_path=args.config, env=args.env) # run_redact_job(config_path='configs/local.yaml', env='local')
     print(json.dumps(summary, indent=2))
 
 
